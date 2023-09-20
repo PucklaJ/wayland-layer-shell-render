@@ -41,6 +41,7 @@ func NewContext() (ctx Context, err error) {
 	})
 	displayRoundTrip(ctx.Display)
 
+	// Check for sufficient support
 	if ctx.Shm == nil {
 		err = errors.New("No shm support")
 		return
@@ -61,6 +62,32 @@ func NewContext() (ctx Context, err error) {
 		err = errors.New("No xdg output manager support")
 		return
 	}
+
+	ctx.Seat.SetCapabilitiesHandler(func(e client.SeatCapabilitiesEvent) {
+		SeatCapabilities(&ctx, e)
+	})
+	displayRoundTrip(ctx.Display)
+
+	if ctx.Pointer == nil {
+		err = errors.New("No pointer support")
+		return
+	}
+
+	ctx.Pointer.SetEnterHandler(func(e client.PointerEnterEvent) {
+		PointerEnter(&ctx, e)
+	})
+	ctx.Pointer.SetLeaveHandler(func(e client.PointerLeaveEvent) {
+		PointerLeave(&ctx, e)
+	})
+	ctx.Pointer.SetMotionHandler(func(e client.PointerMotionEvent) {
+		PointerMotion(&ctx, e)
+	})
+	ctx.Pointer.SetButtonHandler(func(e client.PointerButtonEvent) {
+		PointerButton(&ctx, e)
+	})
+	ctx.Pointer.SetAxisHandler(func(e client.PointerAxisEvent) {
+		PointerAxis(&ctx, e)
+	})
 
 	return
 }

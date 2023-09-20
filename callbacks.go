@@ -2,6 +2,7 @@ package wayland_layer_shell_render
 
 import (
 	"fmt"
+	"os"
 
 	zwlr "github.com/PucklaJ/wayland-layer-shell-render/wayland/unstable/wlr-layer-shell-v1"
 	"github.com/rajveermalviya/go-wayland/wayland/client"
@@ -34,4 +35,38 @@ func RegistryGlobal(ctx *Context, e client.RegistryGlobalEvent) {
 
 func RegistryGlobalRemove(ctx *Context, e client.RegistryGlobalRemoveEvent) {
 	fmt.Printf("RegistryGlobalRemove: name=%d\n", e.Name)
+}
+
+func SeatCapabilities(ctx *Context, e client.SeatCapabilitiesEvent) {
+	fmt.Printf("SeatCapabilities: caps=%d\n", e.Capabilities)
+
+	if e.Capabilities&uint32(client.SeatCapabilityPointer) != 0 {
+		var err error
+		ctx.Pointer, err = ctx.Seat.GetPointer()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to get pointer: %s\n", err)
+		}
+	} else {
+		ctx.Pointer = nil
+	}
+}
+
+func PointerEnter(ctx *Context, e client.PointerEnterEvent) {
+
+}
+
+func PointerLeave(ctx *Context, e client.PointerLeaveEvent) {
+
+}
+
+func PointerMotion(ctx *Context, e client.PointerMotionEvent) {
+
+}
+
+func PointerButton(ctx *Context, e client.PointerButtonEvent) {
+
+}
+
+func PointerAxis(ctx *Context, e client.PointerAxisEvent) {
+
 }
