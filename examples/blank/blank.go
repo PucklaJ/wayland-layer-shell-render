@@ -15,4 +15,6 @@ func main() {
 	}
 
 	ctx.Run()
+
+	ctx.Destroy()
 }

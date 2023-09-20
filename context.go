@@ -3,6 +3,8 @@ package wayland_layer_shell_render
 import (
 	"errors"
 	"fmt"
+	"os"
+	"time"
 
 	zwlr "github.com/PucklaJ/wayland-layer-shell-render/wayland/unstable/wlr-layer-shell-v1"
 	zxdg "github.com/rajveermalviya/go-wayland/wayland/unstable/xdg-output-v1"
@@ -25,7 +27,9 @@ type Context struct {
 	Running bool
 }
 
-func NewContext() (ctx Context, err error) {
+func NewContext() (ctx *Context, err error) {
+	ctx = new(Context)
+
 	ctx.Display, err = client.Connect("")
 	if err != nil {
 		return
@@ -37,10 +41,10 @@ func NewContext() (ctx Context, err error) {
 	}
 
 	ctx.Registry.SetGlobalHandler(func(e client.RegistryGlobalEvent) {
-		RegistryGlobal(&ctx, e)
+		RegistryGlobal(ctx, e)
 	})
 	ctx.Registry.SetGlobalRemoveHandler(func(e client.RegistryGlobalRemoveEvent) {
-		RegistryGlobalRemove(&ctx, e)
+		RegistryGlobalRemove(ctx, e)
 	})
 	displayRoundTrip(ctx.Display)
 
@@ -71,7 +75,7 @@ func NewContext() (ctx Context, err error) {
 	}
 
 	ctx.Seat.SetCapabilitiesHandler(func(e client.SeatCapabilitiesEvent) {
-		SeatCapabilities(&ctx, e)
+		SeatCapabilities(ctx, e)
 	})
 	displayRoundTrip(ctx.Display)
 
@@ -81,19 +85,19 @@ func NewContext() (ctx Context, err error) {
 	}
 
 	ctx.Pointer.SetEnterHandler(func(e client.PointerEnterEvent) {
-		PointerEnter(&ctx, e)
+		PointerEnter(ctx, e)
 	})
 	ctx.Pointer.SetLeaveHandler(func(e client.PointerLeaveEvent) {
-		PointerLeave(&ctx, e)
+		PointerLeave(ctx, e)
 	})
 	ctx.Pointer.SetMotionHandler(func(e client.PointerMotionEvent) {
-		PointerMotion(&ctx, e)
+		PointerMotion(ctx, e)
 	})
 	ctx.Pointer.SetButtonHandler(func(e client.PointerButtonEvent) {
-		PointerButton(&ctx, e)
+		PointerButton(ctx, e)
 	})
 	ctx.Pointer.SetAxisHandler(func(e client.PointerAxisEvent) {
-		PointerAxis(&ctx, e)
+		PointerAxis(ctx, e)
 	})
 
 	for i := range ctx.Outputs {
@@ -160,12 +164,59 @@ func (ctx *Context) Run() {
 			ro := &ctx.Outputs[i]
 
 			if ro.ConfigureEvent != nil {
-				fmt.Printf("TODO: Configure Output \"%s\" with w=%d h=%d\n", ro.Name, ro.ConfigureEvent.Width, ro.ConfigureEvent.Height)
+				if ro.Memory != nil {
+					ro.Memory.Destroy()
+				}
+
+				var err error
+				ro.Memory, err = CreateSharedMemory(ctx.Shm, int32(ro.ConfigureEvent.Width), int32(ro.ConfigureEvent.Height), uint32(client.ShmFormatArgb8888))
+				if err != nil {
+					ro.Memory = nil
+					fmt.Fprintf(os.Stderr, "Failed to create memory for \"%s\": %s\n", ro.Name, err)
+				}
 
 				ro.ConfigureEvent = nil
 			}
 		}
+
+		for i := range ctx.Outputs {
+			ro := &ctx.Outputs[i]
+
+			if ro.Memory != nil {
+				for j := 0; j < len(ro.Memory.Data); j += 4 {
+					ro.Memory.Data[j+0] = 100
+					ro.Memory.Data[j+1] = 20
+					ro.Memory.Data[j+2] = 60
+					ro.Memory.Data[j+3] = 10
+				}
+
+				ro.Surface.Attach(ro.Memory.Buffer, 0, 0)
+				ro.Surface.Damage(0, 0, ro.OutputDims[2], ro.OutputDims[3])
+				ro.Surface.Commit()
+			}
+		}
+
+		time.Sleep(16 * time.Millisecond)
 	}
+}
+
+func (ctx *Context) Destroy() {
+	for i := range ctx.Outputs {
+		ro := &ctx.Outputs[i]
+
+		ro.LayerSurface.Destroy()
+		ro.Surface.Destroy()
+		if ro.Memory != nil {
+			ro.Memory.Destroy()
+		}
+		ro.XdgOutput.Destroy()
+	}
+
+	ctx.LayerShell.Destroy()
+	ctx.OutputManager.Destroy()
+	ctx.Shm.Destroy()
+	ctx.Registry.Destroy()
+	ctx.Display.Destroy()
 }
 
 func displayRoundTrip(d *client.Display) {

@@ -39,12 +39,9 @@ func RegistryGlobal(ctx *Context, e client.RegistryGlobalEvent) {
 }
 
 func RegistryGlobalRemove(ctx *Context, e client.RegistryGlobalRemoveEvent) {
-	fmt.Printf("RegistryGlobalRemove: name=%d\n", e.Name)
 }
 
 func SeatCapabilities(ctx *Context, e client.SeatCapabilitiesEvent) {
-	fmt.Printf("SeatCapabilities: caps=%d\n", e.Capabilities)
-
 	if e.Capabilities&uint32(client.SeatCapabilityPointer) != 0 {
 		var err error
 		ctx.Pointer, err = ctx.Seat.GetPointer()
@@ -65,7 +62,6 @@ func PointerLeave(ctx *Context, e client.PointerLeaveEvent) {
 }
 
 func PointerMotion(ctx *Context, e client.PointerMotionEvent) {
-
 }
 
 func PointerButton(ctx *Context, e client.PointerButtonEvent) {
@@ -99,6 +95,8 @@ func XdgOutputDescription(ro *RenderOutput, e zxdg.OutputDescriptionEvent) {
 }
 
 func LayerSurfaceConfigure(ro *RenderOutput, e zwlr.LayerSurfaceConfigureEvent) {
+	ro.LayerSurface.AckConfigure(e.Serial)
+
 	ro.ConfigureEvent = new(ConfigureEvent)
 	ro.ConfigureEvent.Width = e.Width
 	ro.ConfigureEvent.Height = e.Height
