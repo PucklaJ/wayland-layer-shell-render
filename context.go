@@ -2,6 +2,7 @@ package wayland_layer_shell_render
 
 import (
 	"errors"
+	"fmt"
 
 	zwlr "github.com/PucklaJ/wayland-layer-shell-render/wayland/unstable/wlr-layer-shell-v1"
 	zxdg "github.com/rajveermalviya/go-wayland/wayland/unstable/xdg-output-v1"
@@ -18,6 +19,8 @@ type Context struct {
 	Pointer       *client.Pointer
 	LayerShell    *zwlr.LayerShell
 	OutputManager *zxdg.OutputManager
+
+	Outputs []RenderOutput
 
 	Running bool
 }
@@ -62,6 +65,10 @@ func NewContext() (ctx Context, err error) {
 		err = errors.New("No xdg output manager support")
 		return
 	}
+	if len(ctx.Outputs) == 0 {
+		err = errors.New("No outputs")
+		return
+	}
 
 	ctx.Seat.SetCapabilitiesHandler(func(e client.SeatCapabilitiesEvent) {
 		SeatCapabilities(&ctx, e)
@@ -89,7 +96,76 @@ func NewContext() (ctx Context, err error) {
 		PointerAxis(&ctx, e)
 	})
 
+	for i := range ctx.Outputs {
+		ro := &ctx.Outputs[i]
+		var oErr error
+		ro.XdgOutput, oErr = ctx.OutputManager.GetXdgOutput(ro.Output)
+		if oErr != nil {
+			err = fmt.Errorf("Failed to get XDG output: %s", oErr)
+			return
+		}
+
+		ro.XdgOutput.SetLogicalPositionHandler(func(e zxdg.OutputLogicalPositionEvent) {
+			XdgOutputLogicalPosition(ro, e)
+		})
+		ro.XdgOutput.SetLogicalSizeHandler(func(e zxdg.OutputLogicalSizeEvent) {
+			XdgOutputLogicalSize(ro, e)
+		})
+		ro.XdgOutput.SetDoneHandler(func(e zxdg.OutputDoneEvent) {
+			XdgOutputDone(ro, e)
+		})
+		ro.XdgOutput.SetNameHandler(func(e zxdg.OutputNameEvent) {
+			XdgOutputName(ro, e)
+		})
+		ro.XdgOutput.SetDescriptionHandler(func(e zxdg.OutputDescriptionEvent) {
+			XdgOutputDescription(ro, e)
+		})
+
+		ro.Surface, oErr = ctx.Compositor.CreateSurface()
+		if oErr != nil {
+			err = fmt.Errorf("Failed to create surface: %s", oErr)
+			return
+		}
+
+		ro.LayerSurface, oErr = ctx.LayerShell.GetLayerSurface(ro.Surface, ro.Output, uint32(zwlr.LayerShellLayerOverlay), fmt.Sprint("wayland-layer-shell-render-", i))
+		if oErr != nil {
+			err = fmt.Errorf("Failed to create layer surface: %s", oErr)
+			return
+		}
+
+		ro.LayerSurface.SetConfigureHandler(func(e zwlr.LayerSurfaceConfigureEvent) {
+			LayerSurfaceConfigure(ro, e)
+		})
+		ro.LayerSurface.SetClosedHandler(func(e zwlr.LayerSurfaceClosedEvent) {
+			LayerSurfaceClosed(ro, e)
+		})
+
+		ro.LayerSurface.SetAnchor(uint32(zwlr.LayerSurfaceAnchorTop | zwlr.LayerSurfaceAnchorLeft | zwlr.LayerSurfaceAnchorRight | zwlr.LayerSurfaceAnchorBottom))
+		ro.LayerSurface.SetKeyboardInteractivity(0)
+		ro.LayerSurface.SetExclusiveZone(-1)
+		ro.Surface.Commit()
+	}
+	displayRoundTrip(ctx.Display)
+
 	return
+}
+
+func (ctx *Context) Run() {
+	ctx.Running = true
+
+	for ctx.Running {
+		displayRoundTrip(ctx.Display)
+
+		for i := range ctx.Outputs {
+			ro := &ctx.Outputs[i]
+
+			if ro.ConfigureEvent != nil {
+				fmt.Printf("TODO: Configure Output \"%s\" with w=%d h=%d\n", ro.Name, ro.ConfigureEvent.Width, ro.ConfigureEvent.Height)
+
+				ro.ConfigureEvent = nil
+			}
+		}
+	}
 }
 
 func displayRoundTrip(d *client.Display) {

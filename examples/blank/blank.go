@@ -8,9 +8,11 @@ import (
 )
 
 func main() {
-	_, err := wlsr.NewContext()
+	ctx, err := wlsr.NewContext()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create context: %s\n", err)
 		os.Exit(1)
 	}
+
+	ctx.Run()
 }
